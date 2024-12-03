@@ -1,0 +1,111 @@
+%% Part 2: Interpolation and Error Analysis (Seasonal Influenza)
+% Coarse time step for interpolation
+h_coarse = 2; % Coarse time step
+time_coarse = 0:h_coarse:T; % Coarse time vector
+odd_coarse_days = time_coarse(2:2:end); % Odd days from coarse simulation
+
+% Seasonal Influenza with coarse resolution
+[S_coarse, I_coarse, R_coarse] = runge_kutta(S0, I0, R0, beta_influenza, gam_influenza, h_coarse, length(time_coarse));
+
+% Ensure proper spacing in time points
+if length(time_coarse) < 3
+    error('Coarse resolution data is insufficient for quadratic interpolation.');
+end
+
+% Interpolation: Linear
+S_linear = interp1(time_coarse, S_coarse, odd_coarse_days, 'linear');
+I_linear = interp1(time_coarse, I_coarse, odd_coarse_days, 'linear');
+R_linear = interp1(time_coarse, R_coarse, odd_coarse_days, 'linear');
+
+% Interpolation: Quadratic
+S_quadratic = interp1(time_coarse, S_coarse, odd_coarse_days, 'pchip'); % Piecewise cubic for quadratic
+I_quadratic = interp1(time_coarse, I_coarse, odd_coarse_days, 'pchip');
+R_quadratic = interp1(time_coarse, R_coarse, odd_coarse_days, 'pchip');
+
+% Ground truth from Part 1 for odd days
+S_true = interp1(time_vec, S_influenza, odd_coarse_days, 'linear'); % Linear interpolation of fine-resolution data
+I_true = interp1(time_vec, I_influenza, odd_coarse_days, 'linear');
+R_true = interp1(time_vec, R_influenza, odd_coarse_days, 'linear');
+
+% Compute L2 Errors
+error_linear_S = sqrt(sum((S_true - S_linear).^2) / length(S_true));
+error_linear_I = sqrt(sum((I_true - I_linear).^2) / length(I_true));
+error_linear_R = sqrt(sum((R_true - R_linear).^2) / length(R_true));
+
+error_quadratic_S = sqrt(sum((S_true - S_quadratic).^2) / length(S_true));
+error_quadratic_I = sqrt(sum((I_true - I_quadratic).^2) / length(I_true));
+error_quadratic_R = sqrt(sum((R_true - R_quadratic).^2) / length(R_true));
+
+% Display Error Table
+error_table = array2table(...
+    [error_linear_S, error_linear_I, error_linear_R; ...
+     error_quadratic_S, error_quadratic_I, error_quadratic_R], ...
+    'VariableNames', {'S(t)', 'I(t)', 'R(t)'}, ...
+    'RowNames', {'Linear', 'Quadratic'});
+
+disp('L2 Errors for Interpolation Methods:');
+disp(error_table);
+
+% Plot Interpolation Results
+figure;
+subplot(3, 1, 1);
+plot(odd_coarse_days, S_true, 'k-o', odd_coarse_days, S_linear, 'b--x', odd_coarse_days, S_quadratic, 'r--*');
+title('S(t): True vs. Interpolation');
+legend('True', 'Linear', 'Quadratic');
+grid on;
+
+subplot(3, 1, 2);
+plot(odd_coarse_days, I_true, 'k-o', odd_coarse_days, I_linear, 'b--x', odd_coarse_days, I_quadratic, 'r--*');
+title('I(t): True vs. Interpolation');
+legend('True', 'Linear', 'Quadratic');
+grid on;
+
+subplot(3, 1, 3);
+plot(odd_coarse_days, R_true, 'k-o', odd_coarse_days, R_linear, 'b--x', odd_coarse_days, R_quadratic, 'r--*');
+title('R(t): True vs. Interpolation');
+legend('True', 'Linear', 'Quadratic');
+grid on;
+
+
+% Runge-Kutta
+
+function [S, I, R] = runge_kutta(S0, I0, R0, beta, gamma, h, steps)
+    S = zeros(steps, 1);
+    I = zeros(steps, 1);
+    R = zeros(steps, 1);
+
+    % initial conditions
+    S(1) = S0;
+    I(1) = I0;
+    R(1) = R0;
+
+    % Total pop
+    N = S0 + I0 + R0;
+
+    for t = 1:steps-1
+        % k1
+        dS1 = -beta * S(t) * I(t) / N;
+        dI1 = beta * S(t) * I(t) / N - gamma * I(t);
+        dR1 = gamma * I(t);
+
+        % k2
+        dS2 = -beta * (S(t) + h*dS1/2) * (I(t) + h*dI1/2) / N;
+        dI2 = beta * (S(t) + h*dS1/2) * (I(t) + h*dI1/2) / N - gamma * (I(t) + h*dI1/2);
+        dR2 = gamma * (I(t) + h*dI1/2);
+
+        % k3
+        dS3 = -beta * (S(t) + h*dS2/2) * (I(t) + h*dI2/2) / N;
+        dI3 = beta * (S(t) + h*dS2/2) * (I(t) + h*dI2/2) / N - gamma * (I(t) + h*dI2/2);
+        dR3 = gamma * (I(t) + h*dI2/2);
+
+        % k4
+        dS4 = -beta * (S(t) + h*dS3) * (I(t) + h*dI3) / N;
+        dI4 = beta * (S(t) + h*dS3) * (I(t) + h*dI3) / N - gamma * (I(t) + h*dI3);
+        dR4 = gamma * (I(t) + h*dI3);
+
+        % Update SIR
+        S(t+1) = S(t) + h * (dS1 + 2*dS2 + 2*dS3 + dS4) / 6;
+        I(t+1) = I(t) + h * (dI1 + 2*dI2 + 2*dI3 + dI4) / 6;
+        R(t+1) = R(t) + h * (dR1 + 2*dR2 + 2*dR3 + dR4) / 6;
+    end
+end
