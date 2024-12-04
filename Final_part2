@@ -1,152 +1,156 @@
-% Part I: SIR Model using 4th-order Runge-Kutta Method
-h = 1;  % Fine step size
-S0 = 990; I0 = 10; R0 = 0;  % Initial conditions
-T = 100;  % Total simulation time
-time_vec = 0:h:T;  % Time vector for h=1
-steps = length(time_vec);
-beta_influenza = 0.3; gamma_influenza = 0.1;  % Influenza parameters
+% Parameters for SIR model
+S0 = 990; I0 = 10; R0 = 0; T = 100;
+N = S0 + I0 + R0; % Total population
+beta = 0.3; gamma = 0.1;
 
-% Run the fine-grained simulation (h=1)
-[S_fine, I_fine, R_fine] = runge_kutta(S0, I0, R0, beta_influenza, gamma_influenza, h, steps);
+% Fine timestep simulation (h = 1)
+h_fine = 1;
+steps_fine = T / h_fine + 1;
+time_vec_fine = 0:h_fine:T;
+[S_fine, I_fine, R_fine] = runge_kutta(S0, I0, R0, beta, gamma, h_fine, steps_fine);
 
-% Part II: Interpolation and Error Analysis
-h_coarse = 2;  % Coarser step size
-time_vec_coarse = 0:h_coarse:T;  % Time vector for h=2
-steps_coarse = length(time_vec_coarse);
+% Normalize by population size
+S_fine = S_fine / N;
+I_fine = I_fine / N;
+R_fine = R_fine / N;
 
-% Run the coarse simulation (h=2)
-[S_coarse, I_coarse, R_coarse] = runge_kutta(S0, I0, R0, beta_influenza, gamma_influenza, h_coarse, steps_coarse);
+% Coarse timestep simulation (h = 2)
+h_coarse = 2;
+steps_coarse = T / h_coarse + 1;
+time_vec_coarse = 0:h_coarse:T;
+[S_coarse, I_coarse, R_coarse] = runge_kutta(S0, I0, R0, beta, gamma, h_coarse, steps_coarse);
 
-% Perform Newton Interpolation
-time_odd = time_vec(2:2:end);  % Odd days (not in coarse data)
+% Normalize coarse results
+S_coarse = S_coarse / N;
+I_coarse = I_coarse / N;
+R_coarse = R_coarse / N;
 
-S_linear = zeros(size(time_odd));
-I_linear = zeros(size(time_odd));
-R_linear = zeros(size(time_odd));
+% Odd time points for interpolation
+odd_times = 1:2:T-1;
 
-S_newton = zeros(size(time_odd));
-I_newton = zeros(size(time_odd));
-R_newton = zeros(size(time_odd));
+% Linear interpolation
+linear_S = arrayfun(@(t) newton_interp(time_vec_coarse(1:2), S_coarse(1:2), t), odd_times);
+linear_I = arrayfun(@(t) newton_interp(time_vec_coarse(1:2), I_coarse(1:2), t), odd_times);
+linear_R = arrayfun(@(t) newton_interp(time_vec_coarse(1:2), R_coarse(1:2), t), odd_times);
 
-for i = 1:length(time_odd)
-    % Use two closest points for linear (Newton) interpolation
-    [~, idx] = min(abs(time_vec_coarse - time_odd(i)));
-    idx_range_linear = max(1, idx):min(idx+1, steps_coarse);
-    S_linear(i) = newton_interpolation(time_odd(i), time_vec_coarse(idx_range_linear), S_coarse(idx_range_linear));
-    I_linear(i) = newton_interpolation(time_odd(i), time_vec_coarse(idx_range_linear), I_coarse(idx_range_linear));
-    R_linear(i) = newton_interpolation(time_odd(i), time_vec_coarse(idx_range_linear), R_coarse(idx_range_linear));
+% Quadratic interpolation (robust implementation)
+quadratic_S = arrayfun(@(t) robust_quadratic_interp(time_vec_coarse, S_coarse, t), odd_times);
+quadratic_I = arrayfun(@(t) robust_quadratic_interp(time_vec_coarse, I_coarse, t), odd_times);
+quadratic_R = arrayfun(@(t) robust_quadratic_interp(time_vec_coarse, R_coarse, t), odd_times);
 
-    % Use three closest points for quadratic (Newton) interpolation
-    idx_range_newton = max(1, idx-1):min(idx+1, steps_coarse);
-    S_newton(i) = newton_interpolation(time_odd(i), time_vec_coarse(idx_range_newton), S_coarse(idx_range_newton));
-    I_newton(i) = newton_interpolation(time_odd(i), time_vec_coarse(idx_range_newton), I_coarse(idx_range_newton));
-    R_newton(i) = newton_interpolation(time_odd(i), time_vec_coarse(idx_range_newton), R_coarse(idx_range_newton));
-end
+% Extract exact values at odd time points
+exact_S_odd = S_fine(round(odd_times / h_fine) + 1);
+exact_I_odd = I_fine(round(odd_times / h_fine) + 1);
+exact_R_odd = R_fine(round(odd_times / h_fine) + 1);
 
-% L2 Error Calculation
-S_fine_odd = S_fine(2:2:end);  % Reference data for odd days
-I_fine_odd = I_fine(2:2:end);
-R_fine_odd = R_fine(2:2:end);
+% Compute scalar L2 errors using the provided formula
+N_int = length(odd_times); % Total number of interpolated points
 
-% Linear interpolation errors
-L2_S_linear = sqrt(mean((S_linear - S_fine_odd).^2));
-L2_I_linear = sqrt(mean((I_linear - I_fine_odd).^2));
-L2_R_linear = sqrt(mean((R_linear - R_fine_odd).^2));
+% Linear Interpolation Errors
+linear_S_error = sqrt(sum((linear_S(:) - exact_S_odd(:)).^2) / N_int);
+linear_I_error = sqrt(sum((linear_I(:) - exact_I_odd(:)).^2) / N_int);
+linear_R_error = sqrt(sum((linear_R(:) - exact_R_odd(:)).^2) / N_int);
 
-% Newton interpolation errors
-L2_S_newton = sqrt(mean((S_newton - S_fine_odd).^2));
-L2_I_newton = sqrt(mean((I_newton - I_fine_odd).^2));
-L2_R_newton = sqrt(mean((R_newton - R_fine_odd).^2));
+% Quadratic Interpolation Errors
+quadratic_S_error = sqrt(sum((quadratic_S(:) - exact_S_odd(:)).^2) / N_int);
+quadratic_I_error = sqrt(sum((quadratic_I(:) - exact_I_odd(:)).^2) / N_int);
+quadratic_R_error = sqrt(sum((quadratic_R(:) - exact_R_odd(:)).^2) / N_int);
 
-% Display Error Table
-disp('Interpolation Error Table');
-disp(table(["Linear"; "Newton"], [L2_S_linear; L2_S_newton], [L2_I_linear; L2_I_newton], [L2_R_linear; L2_R_newton], ...
-    'VariableNames', {'Method', 'L2_Error_S', 'L2_Error_I', 'L2_Error_R'}));
+% Create and display a table of scalar L2 errors
+error_table = table(["Linear"; "Quadratic"], ...
+                    [linear_S_error; quadratic_S_error], ...
+                    [linear_I_error; quadratic_I_error], ...
+                    [linear_R_error; quadratic_R_error], ...
+                    'VariableNames', {'Method', 'S_Error', 'I_Error', 'R_Error'});
 
-% Plot Comparison of Interpolation and Fine-Grained Data
+disp('L2 Error Table:');
+disp(error_table);
+
+% Plot results with solid lines
 figure;
 subplot(3, 1, 1);
-plot(time_vec, S_fine, 'b-', time_odd, S_linear, 'r*', time_odd, S_newton, 'go');
-title('S(t) Comparison');
-xlabel('Time'); ylabel('S(t)');
-legend('Fine-Grained', 'Linear Interpolation', 'Newton Interpolation');
-grid on;
+plot(time_vec_fine, S_fine, 'k-', 'LineWidth', 1.5, 'DisplayName', 'Exact');
+hold on;
+plot(odd_times, linear_S, 'r-', 'LineWidth', 1.5, 'DisplayName', 'Linear');
+plot(odd_times, quadratic_S, 'g-', 'LineWidth', 1.5, 'DisplayName', 'Quadratic');
+title('S(t)'); legend; grid on;
 
 subplot(3, 1, 2);
-plot(time_vec, I_fine, 'b-', time_odd, I_linear, 'r*', time_odd, I_newton, 'go');
-title('I(t) Comparison');
-xlabel('Time'); ylabel('I(t)');
-legend('Fine-Grained', 'Linear Interpolation', 'Newton Interpolation');
-grid on;
+plot(time_vec_fine, I_fine, 'k-', 'LineWidth', 1.5, 'DisplayName', 'Exact');
+hold on;
+plot(odd_times, linear_I, 'r-', 'LineWidth', 1.5, 'DisplayName', 'Linear');
+plot(odd_times, quadratic_I, 'g-', 'LineWidth', 1.5, 'DisplayName', 'Quadratic');
+title('I(t)'); legend; grid on;
 
 subplot(3, 1, 3);
-plot(time_vec, R_fine, 'b-', time_odd, R_linear, 'r*', time_odd, R_newton, 'go');
-title('R(t) Comparison');
-xlabel('Time'); ylabel('R(t)');
-legend('Fine-Grained', 'Linear Interpolation', 'Newton Interpolation');
-grid on;
+plot(time_vec_fine, R_fine, 'k-', 'LineWidth', 1.5, 'DisplayName', 'Exact');
+hold on;
+plot(odd_times, linear_R, 'r-', 'LineWidth', 1.5, 'DisplayName', 'Linear');
+plot(odd_times, quadratic_R, 'g-', 'LineWidth', 1.5, 'DisplayName', 'Quadratic');
+title('R(t)'); legend; grid on;
 
-% Newton Interpolation Function
+% Supporting Functions
 
-function y_interp = newton_interpolation(x_interp, x_data, y_data)
-    n = length(x_data);
-    diff_table = zeros(n, n);
-    diff_table(:, 1) = y_data(:);  % Fill the first column with y_data
+% Runge-Kutta implementation (same as original)
 
-    % Compute divided differences
-    for j = 2:n
-        for i = 1:n-j+1
-            diff_table(i, j) = (diff_table(i+1, j-1) - diff_table(i, j-1)) / (x_data(i+j-1) - x_data(i));
-        end
-    end
-
-    % Interpolation
-    y_interp = diff_table(1, 1);  % Start with the first term
-    prod_term = 1;
-    for k = 2:n
-        prod_term = prod_term * (x_interp - x_data(k-1));
-        y_interp = y_interp + prod_term * diff_table(1, k);
-    end
-end
-
-% Runge-Kutta
 function [S, I, R] = runge_kutta(S0, I0, R0, beta, gamma, h, steps)
     S = zeros(steps, 1);
     I = zeros(steps, 1);
     R = zeros(steps, 1);
-
-    % initial conditions
-    S(1) = S0;
-    I(1) = I0;
-    R(1) = R0;
-
-    % Total pop
+    S(1) = S0; I(1) = I0; R(1) = R0;
     N = S0 + I0 + R0;
 
     for t = 1:steps-1
-        % k1
         dS1 = -beta * S(t) * I(t) / N;
         dI1 = beta * S(t) * I(t) / N - gamma * I(t);
         dR1 = gamma * I(t);
 
-        % k2
-        dS2 = -beta * (S(t) + h*dS1/2) * (I(t) + h*dI1/2) / N;
-        dI2 = beta * (S(t) + h*dS1/2) * (I(t) + h*dI1/2) / N - gamma * (I(t) + h*dI1/2);
-        dR2 = gamma * (I(t) + h*dI1/2);
+        dS2 = -beta * (S(t) + h * dS1 / 2) * (I(t) + h * dI1 / 2) / N;
+        dI2 = beta * (S(t) + h * dS1 / 2) * (I(t) + h * dI1 / 2) / N - gamma * (I(t) + h * dI1 / 2);
+        dR2 = gamma * (I(t) + h * dI1 / 2);
 
-        % k3
-        dS3 = -beta * (S(t) + h*dS2/2) * (I(t) + h*dI2/2) / N;
-        dI3 = beta * (S(t) + h*dS2/2) * (I(t) + h*dI2/2) / N - gamma * (I(t) + h*dI2/2);
-        dR3 = gamma * (I(t) + h*dI2/2);
+        dS3 = -beta * (S(t) + h * dS2 / 2) * (I(t) + h * dI2 / 2) / N;
+        dI3 = beta * (S(t) + h * dS2 / 2) * (I(t) + h * dI2 / 2) / N - gamma * (I(t) + h * dI2 / 2);
+        dR3 = gamma * (I(t) + h * dI2 / 2);
 
-        % k4
-        dS4 = -beta * (S(t) + h*dS3) * (I(t) + h*dI3) / N;
-        dI4 = beta * (S(t) + h*dS3) * (I(t) + h*dI3) / N - gamma * (I(t) + h*dI3);
-        dR4 = gamma * (I(t) + h*dI3);
+        dS4 = -beta * (S(t) + h * dS3) * (I(t) + h * dI3) / N;
+        dI4 = beta * (S(t) + h * dS3) * (I(t) + h * dI3) / N - gamma * (I(t) + h * dI3);
+        dR4 = gamma * (I(t) + h * dI3);
 
-        % Update SIR
         S(t+1) = S(t) + h * (dS1 + 2*dS2 + 2*dS3 + dS4) / 6;
         I(t+1) = I(t) + h * (dI1 + 2*dI2 + 2*dI3 + dI4) / 6;
         R(t+1) = R(t) + h * (dR1 + 2*dR2 + 2*dR3 + dR4) / 6;
     end
+end
+
+% Newton interpolation for linear
+function y_interp = newton_interp(x_vals, y_vals, x)
+    n = length(x_vals);
+    dd_table = zeros(n, n);
+    dd_table(:, 1) = y_vals;
+    for j = 2:n
+        for i = 1:n-j+1
+            dd_table(i, j) = (dd_table(i+1, j-1) - dd_table(i, j-1)) / (x_vals(i+j-1) - x_vals(i));
+        end
+    end
+    y_interp = dd_table(1, 1);
+    product = 1;
+    for i = 1:n-1
+        product = product * (x - x_vals(i));
+        y_interp = y_interp + product * dd_table(1, i+1);
+    end
+end
+
+% Robust quadratic interpolation
+function y_interp = robust_quadratic_interp(x_vals, y_vals, x)
+    n = length(x_vals);
+    if n < 3
+        error('At least 3 points are required for quadratic interpolation.');
+    end
+    [~, idx] = min(abs(x_vals - x));
+    idx = max(2, min(idx, n-1));
+    x_nearest = x_vals(idx-1:idx+1);
+    y_nearest = y_vals(idx-1:idx+1);
+    p = polyfit(x_nearest, y_nearest, 2);
+    y_interp = polyval(p, x);
 end
