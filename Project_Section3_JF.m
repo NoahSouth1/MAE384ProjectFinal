@@ -32,7 +32,7 @@ for j = 1:3
         gam_true = 0.1;
         
         % Create blank figure for this step
-        figure(j);
+        % figure(j);
         
         % True data set
         [S, I, R] = runge_kutta(S0, I0, R0, beta_true, gam_true, h, steps);
@@ -42,6 +42,7 @@ for j = 1:3
         ylabel('Population');
         legend('Susceptible', 'Infected', 'Recovered');
         grid on;
+        hold off
     
     elseif j == 2
         % Parameter sets
