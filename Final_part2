@@ -1,4 +1,4 @@
-% Parameters for SIR model
+ % Parameters for SIR model
 S0 = 990; I0 = 10; R0 = 0; T = 100;
 N = S0 + I0 + R0; % Total population
 beta = 0.3; gamma = 0.1;
@@ -28,15 +28,16 @@ R_coarse = R_coarse / N;
 % Odd time points for interpolation
 odd_times = 1:2:T-1;
 
-% Linear interpolation
-linear_S = arrayfun(@(t) newton_interp(time_vec_coarse(1:2), S_coarse(1:2), t), odd_times);
-linear_I = arrayfun(@(t) newton_interp(time_vec_coarse(1:2), I_coarse(1:2), t), odd_times);
-linear_R = arrayfun(@(t) newton_interp(time_vec_coarse(1:2), R_coarse(1:2), t), odd_times);
+% Linear interpolation using dynamically selected bracketing points
+linear_S = arrayfun(@(t) linear_interp_dynamic(time_vec_coarse, S_coarse, t), odd_times);
+linear_I = arrayfun(@(t) linear_interp_dynamic(time_vec_coarse, I_coarse, t), odd_times);
+linear_R = arrayfun(@(t) linear_interp_dynamic(time_vec_coarse, R_coarse, t), odd_times);
 
-% Quadratic interpolation (robust implementation)
-quadratic_S = arrayfun(@(t) robust_quadratic_interp(time_vec_coarse, S_coarse, t), odd_times);
-quadratic_I = arrayfun(@(t) robust_quadratic_interp(time_vec_coarse, I_coarse, t), odd_times);
-quadratic_R = arrayfun(@(t) robust_quadratic_interp(time_vec_coarse, R_coarse, t), odd_times);
+% Quadratic interpolation using dynamically selected points
+quadratic_S = arrayfun(@(t) quadratic_interp_dynamic(time_vec_coarse, S_coarse, t), odd_times);
+quadratic_I = arrayfun(@(t) quadratic_interp_dynamic(time_vec_coarse, I_coarse, t), odd_times);
+quadratic_R = arrayfun(@(t) quadratic_interp_dynamic(time_vec_coarse, R_coarse, t), odd_times);
+
 
 % Extract exact values at odd time points
 exact_S_odd = S_fine(round(odd_times / h_fine) + 1);
@@ -66,7 +67,7 @@ error_table = table(["Linear"; "Quadratic"], ...
 disp('L2 Error Table:');
 disp(error_table);
 
-% Plot results with solid lines
+% Plot results
 figure;
 subplot(3, 1, 1);
 plot(time_vec_fine, S_fine, 'k-', 'LineWidth', 1.5, 'DisplayName', 'Exact');
@@ -91,9 +92,9 @@ title('R(t)'); legend; grid on;
 
 % Supporting Functions
 
-% Runge-Kutta implementation (same as original)
 
 function [S, I, R] = runge_kutta(S0, I0, R0, beta, gamma, h, steps)
+    % Runge-Kutta method for solving the SIR model
     S = zeros(steps, 1);
     I = zeros(steps, 1);
     R = zeros(steps, 1);
@@ -123,34 +124,103 @@ function [S, I, R] = runge_kutta(S0, I0, R0, beta, gamma, h, steps)
     end
 end
 
-% Newton interpolation for linear
-function y_interp = newton_interp(x_vals, y_vals, x)
-    n = length(x_vals);
-    dd_table = zeros(n, n);
-    dd_table(:, 1) = y_vals;
-    for j = 2:n
-        for i = 1:n-j+1
-            dd_table(i, j) = (dd_table(i+1, j-1) - dd_table(i, j-1)) / (x_vals(i+j-1) - x_vals(i));
-        end
-    end
-    y_interp = dd_table(1, 1);
-    product = 1;
-    for i = 1:n-1
-        product = product * (x - x_vals(i));
-        y_interp = y_interp + product * dd_table(1, i+1);
+function result = manual_arrayfun(func, array)
+    % Manually implements arrayfun
+    result = zeros(size(array));
+    for i = 1:length(array)
+        result(i) = func(array(i));
     end
 end
 
-% Robust quadratic interpolation
-function y_interp = robust_quadratic_interp(x_vals, y_vals, x)
-    n = length(x_vals);
-    if n < 3
-        error('At least 3 points are required for quadratic interpolation.');
+function result = manual_sum(array)
+    % Manually implements sum
+    result = 0;
+    for i = 1:length(array)
+        result = result + array(i);
     end
-    [~, idx] = min(abs(x_vals - x));
-    idx = max(2, min(idx, n-1));
-    x_nearest = x_vals(idx-1:idx+1);
-    y_nearest = y_vals(idx-1:idx+1);
-    p = polyfit(x_nearest, y_nearest, 2);
-    y_interp = polyval(p, x);
+end
+
+function y_interp = linear_interp_dynamic(x_vals, y_vals, x)
+    % Manual linear interpolation
+    idx = 1;
+    for i = 1:length(x_vals)
+        if x_vals(i) <= x
+            idx = i;
+        else
+            break;
+        end
+    end
+    if idx == length(x_vals)
+        idx = idx - 1;
+    end
+    x1 = x_vals(idx);
+    x2 = x_vals(idx + 1);
+    y1 = y_vals(idx);
+    y2 = y_vals(idx + 1);
+    y_interp = y1 + (y2 - y1) * (x - x1) / (x2 - x1);
+end
+
+function y_interp = quadratic_interp_dynamic(x_vals, y_vals, x)
+    % Manual quadratic interpolation
+    % Dynamically select the closest three points
+    closest_dist = abs(x_vals - x);
+    idx = 1;
+    min_dist = closest_dist(1);
+    for i = 2:length(closest_dist)
+        if closest_dist(i) < min_dist
+            min_dist = closest_dist(i);
+            idx = i;
+        end
+    end
+    
+    % Select three nearest points
+    if idx == 1
+        x_nearest = x_vals(1:3).';
+        y_nearest = y_vals(1:3).';
+    elseif idx == length(x_vals)
+        x_nearest = x_vals(end-2:end).';
+        y_nearest = y_vals(end-2:end).';
+    else
+        x_nearest = x_vals(idx-1:idx+1).';
+        y_nearest = y_vals(idx-1:idx+1).';
+    end
+
+    % Ensure column vectors for consistency
+    x_nearest = x_nearest(:);
+    y_nearest = y_nearest(:);
+
+    % Form the quadratic system matrix A
+    A = [x_nearest.^2, x_nearest, ones(length(x_nearest), 1)];
+
+    % Solve for the coefficients using manual Gaussian elimination
+    coeffs = manual_gauss_elimination(A, y_nearest);
+
+    % Evaluate the polynomial at x
+    y_interp = coeffs(1) * x^2 + coeffs(2) * x + coeffs(3);
+end
+
+
+function coeffs = manual_gauss_elimination(A, b)
+    % Manual Gaussian elimination for solving Ax = b
+    n = size(A, 1);
+    for i = 1:n
+        % Pivoting
+        [~, max_row] = max(abs(A(i:n, i)));
+        max_row = max_row + i - 1;
+        if max_row ~= i
+            A([i, max_row], :) = A([max_row, i], :);
+            b([i, max_row]) = b([max_row, i]);
+        end
+        % Elimination
+        for j = i+1:n
+            factor = A(j, i) / A(i, i);
+            A(j, i:end) = A(j, i:end) - factor * A(i, i:end);
+            b(j) = b(j) - factor * b(i);
+        end
+    end
+    % Back substitution
+    coeffs = zeros(n, 1);
+    for i = n:-1:1
+        coeffs(i) = (b(i) - A(i, i+1:end) * coeffs(i+1:end)) / A(i, i);
+    end
 end
