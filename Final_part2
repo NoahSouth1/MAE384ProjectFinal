@@ -1,4 +1,17 @@
- % Parameters for SIR model
+%{
+Comments:
+The results show that quadratic interpolation is more accurate than linear interpolation, 
+This is evidenced by the smaller errors and tighter fit of the exact data. 
+These numbers are shown in the error table. 
+
+When zooming in on the graphs, the differences become clear, 
+linear interpolation shows more noticeable deviations, 
+while quadratic interpolation closely follows the exact model.
+
+%}
+%Beginning of the code
+
+% Parameters for SIR model
 S0 = 990; I0 = 10; R0 = 0; T = 100;
 N = S0 + I0 + R0; % Total population
 beta = 0.3; gamma = 0.1;
@@ -67,7 +80,7 @@ error_table = table(["Linear"; "Quadratic"], ...
 disp('L2 Error Table:');
 disp(error_table);
 
-% Plot results
+% Plot results on Graphs
 figure;
 subplot(3, 1, 1);
 plot(time_vec_fine, S_fine, 'k-', 'LineWidth', 1.5, 'DisplayName', 'Exact');
@@ -91,6 +104,7 @@ plot(odd_times, quadratic_R, 'g-', 'LineWidth', 1.5, 'DisplayName', 'Quadratic')
 title('R(t)'); legend; grid on;
 
 % Supporting Functions
+
 
 
 function [S, I, R] = runge_kutta(S0, I0, R0, beta, gamma, h, steps)
