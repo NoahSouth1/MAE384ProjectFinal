@@ -1,0 +1,142 @@
+%{
+    By adjusting beta to be a sine wave, we see that, in both examples, the
+general shape of the model follows the constant case. For our plots of S
+and I, we see that they fluctuate about the original plots. The second case
+represents a longer period and a shorter frequency, so the plots fluctuate
+about the original curves both less quickly and with greater peaks and
+troughs. 
+    The plots of the spectrum almost look uninteresting, but they reveal the
+nature of our modification to beta. In both cases, we see that the graph is
+dominated by a spike two orders of magnitude greater than anything else
+represented by the graph and centered at zero. Both graphs have a small spike 
+after the first initial spike. In the first case, the spike is barely 
+noticeable and sits exactly at a frequency of 1. In the second case, the 
+spike is comparitively larger than the first case and is nearly centered 
+at 0.267.
+    Both cases are dominated by a large spike centered at zero. This is because
+they both follow the shape of our original SIR model, which is not periodic
+and thus has a frequency of zero.
+    For the location of the secondary spike, both cases are plotting the
+the multiple of 2*pi contained within the sin expression. For the
+first case, we see a spike at 1. Recall that our first case is defined as
+sin[2*pi*(365/365)*t]. The 365/365 is the inverse of the period, and is
+plotted on our graph. For the second case, the spike is nearly at 0.267.
+This is because the multiple of 2*pi is (100/365). The inverse is the
+desired period of 3.65 days, and its inverse is nearly equal to 0.274,
+which is a frequency value not resolved on our graph.
+    The second case's secondary spike is larger than the first case's secondary
+spike. This is a side effect of our second case having larger fluctuations
+compared to our first. In other words, the sin component of our second graph
+contributes more, so the corresponding frequency spike is larger.
+%}
+for i=1:2
+    h = 0.1; 
+    S0 = 990; 
+    I0 = 10; 
+    R0 = 0; 
+    T = 30; 
+    time_vec = 0:h:T;
+    steps = length(time_vec);
+    beta = 0.3;
+    beta_var = zeros(1,steps);
+    if i==1
+        for k = 1 : steps
+            beta_var(k) = beta * (1 + 5 * sin(2 * pi * (365/365) * time_vec(k)));
+        end 
+    else
+        for k = 1 : steps
+            beta_var(k) = beta * (1 + 5 * sin(2 * pi * (100/365) * time_vec(k)));
+        end 
+    end
+    gamma = 0.1;
+    
+    S = zeros(steps, 1);
+    I = zeros(steps, 1);
+    R = zeros(steps, 1);
+    
+    % initial conditions
+    S(1) = S0;
+    I(1) = I0;
+    R(1) = R0;
+    
+    % Total pop
+    N = S0 + I0 + R0;
+    
+    for t = 1:steps-1
+        % k1
+        dS1 = -beta_var(t) * S(t) * I(t) / N;
+        dI1 = beta_var(t) * S(t) * I(t) / N - gamma * I(t);
+        dR1 = gamma * I(t);
+    
+        % k2
+        dS2 = -beta_var(t) * (S(t) + h*dS1/2) * (I(t) + h*dI1/2) / N;
+        dI2 = beta_var(t) * (S(t) + h*dS1/2) * (I(t) + h*dI1/2) / N - gamma * (I(t) + h*dI1/2);
+        dR2 = gamma * (I(t) + h*dI1/2);
+    
+        % k3
+        dS3 = -beta_var(t) * (S(t) + h*dS2/2) * (I(t) + h*dI2/2) / N;
+        dI3 = beta_var(t) * (S(t) + h*dS2/2) * (I(t) + h*dI2/2) / N - gamma * (I(t) + h*dI2/2);
+        dR3 = gamma * (I(t) + h*dI2/2);
+    
+        % k4
+        dS4 = -beta_var(t) * (S(t) + h*dS3) * (I(t) + h*dI3) / N;
+        dI4 = beta_var(t) * (S(t) + h*dS3) * (I(t) + h*dI3) / N - gamma * (I(t) + h*dI3);
+        dR4 = gamma * (I(t) + h*dI3);
+    
+        % Update SIR
+        S(t+1) = S(t) + h * (dS1 + 2*dS2 + 2*dS3 + dS4) / 6;
+        I(t+1) = I(t) + h * (dI1 + 2*dI2 + 2*dI3 + dI4) / 6;
+        R(t+1) = R(t) + h * (dR1 + 2*dR2 + 2*dR3 + dR4) / 6;
+    end
+    
+    %Fast Fourier Transform
+    Sf=fft(S);
+    If=fft(I);
+    Rf=fft(R);
+    %Spectrum
+    Is=zeros(1,(steps-1)/2);
+    k=1;
+    while k<=(steps+1)/2
+        Is(k)=abs(If(k));
+        k=k+1;
+    end
+    f=(0:(steps-1)/2)/T;
+    %Plot Results
+    if i==1
+    figure(1)
+        subplot(3,1,1); %SIR Model
+            plot(time_vec,S,'b', time_vec,I,'r', time_vec,R,'g');
+            title('SIR Model');
+            xlabel('Time');
+            ylabel('Population');
+            legend('Susceptible', 'Infected', 'Recovered');
+        subplot(3,1,2); %Transmission Rate
+            plot(time_vec,beta_var);
+            title('Transmission Rate (T=1 Day)');
+            xlabel('time');
+            ylabel('Magnitude');
+        subplot(3,1,3) %Spectrum
+            plot(f,Is);
+            title('Discrete Fourier Transform');
+            xlabel('Frequency');
+            ylabel('|Fourier coefficients|');
+    else
+        figure(2)
+        subplot(3,1,1); %SIR Model
+            plot(time_vec,S,'b', time_vec,I,'r', time_vec,R,'g');
+            title('SIR Model');
+            xlabel('Time');
+            ylabel('Population');
+            legend('Susceptible', 'Infected', 'Recovered');
+        subplot(3,1,2); %Transmission Rate
+            plot(time_vec,beta_var);
+            title('Transmission Rate (T=3.65 days)');
+            xlabel('time');
+            ylabel('Magnitude');
+        subplot(3,1,3) %Spectrum
+            plot(f,Is);
+            title('Discrete Fourier Transform');
+            xlabel('Frequency');
+            ylabel('|Fourier coefficients|');
+    end
+end
