@@ -1,5 +1,17 @@
 %% Section 3
-% Q1 - True Data Set (30 day model)
+
+%% Discussion
+% The estimates of I(0) and beta impove as the time frame is shortened.
+% I(0) true was 10, I(0) on the 30-day period was 17.9, I(0) on the 10-day
+% period of 10.23. 
+% 
+% Beta true was 0.3, Beta estimate on the 30-day period was 0.21,
+% Beta estimate on the 10-day period was 0.0.29.
+%
+% This is because the original equation is parabolic and the smaller the sample
+% of data you look at makes the function appear to be more linear, thus
+% making a linear regression estimate more and more accurate. 
+
 for j = 1:3 
     %j = 1 = Q1 - True Data Set (30 day model)
     %j = 2 = Q2 - Estimate via Linear Least Sq (30 day model)
@@ -65,8 +77,14 @@ for j = 1:3
         %Graphing to double check visually
         y_graph = a0 + (time_vec.*a1);
         plot(x_input, y_graph, 'r');
+        title('Linear Least Sq Regression, 30-day period');
+        xlabel('Time');
+        ylabel('Population');
+        grid on;
         hold on
         scatter(x_input,y_output)
+        legend('Estimated Regression Model', 'True data, I(t) function');
+        
         
         %Finding I0 and beta
         % I0 calcs
@@ -112,9 +130,14 @@ for j = 1:3
         %Graphing to double check visually
         y_graph = a0 + (time_vec.*a1);
         plot(x_input, y_graph, 'r');
+        title('Linear Least Sq Regression, 10-day period');
+        xlabel('Time');
+        ylabel('Population');
+        grid on;
         hold on
         scatter(x_input,y_output)
-        
+        legend('Estimated Regression Model', 'True data, I(t) function')
+
         %Finding I0 and beta
         % I0 calcs
         I0_est_10 = exp(a0);
@@ -127,18 +150,6 @@ for j = 1:3
 
     end
 end
-
-%% Discussion
-% The estimates of I(0) and beta impove as the time frame is shortened.
-% I(0) true was 10, I(0) on the 30-day period was 17.9, I(0) on the 10-day
-% period of 10.23. 
-% 
-% Beta true was 0.3, Beta estimate on the 30-day period was 0.0.21,
-% Beta estimate on the 10-day period was 0.0.29.
-%
-% This is because the original equation is parabolic and the smaller the sample
-% of data you look at makes the function appear to be more linear, thus
-% making a linear regression estimate more and more accurate. 
 
 %% Function library
 
